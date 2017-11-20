@@ -1,11 +1,24 @@
 module Threal where
 
 import Data.List
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as M
+import Data.Hashable
 import Control.Applicative( (<$>), (<*>), pure )
+import Control.Monad (when, mapM)
+import Control.Monad.State (State, get, put, runState, evalState, StateT, liftIO, evalStateT)
 
 data Threal = Threal [Threal] [Threal] [Threal]
 
-data ThrealTree = TThunk | TNode [(Threal, ThrealTree, ThrealTree, ThrealTree)] 
+instance Hashable Threal where
+  hashWithSalt salt (Threal reds greens blues) = ((redHash + greenHash + blueHash) * salt) `mod` 34321347
+    where
+      hasher n arr = n + 3 * (sum $ map ((+ (length arr)) . hashWithSalt (salt + n)) arr)
+      redHash = hasher 0 reds
+      greenHash = hasher 1 greens
+      blueHash = hasher 2 blues
+
+data ThrealTree = TThunk | TNode [(Threal, ThrealTree, ThrealTree, ThrealTree)]
 
 data ImpartialTree = IThunk | INode [(Threal, ImpartialTree)]
 
@@ -201,7 +214,7 @@ instance Num Threal where
   abs x = x
   signum x = firstPart + secondPart
       where (rcomp:gcomp:bcomp:arcomp:agcomp:abcomp:[]) = x <|> tzero
-            firstPart 
+            firstPart
                 | rcomp && gcomp && bcomp = tzero
                 | rcomp && gcomp = negBlue
                 | rcomp && bcomp = negGreen
@@ -210,7 +223,7 @@ instance Num Threal where
                 | gcomp = green
                 | bcomp = blue
                 | otherwise = star
-            secondPart 
+            secondPart
                 | arcomp && agcomp && abcomp = tzero
                 | arcomp && agcomp = blue
                 | arcomp && abcomp = green
@@ -291,24 +304,24 @@ notCompBlueRed x y = eqBlueRed x y || cfBlueRed x y
 --
 
 allRedderThan :: Threal -> Threal -> Bool
-allRedderThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `allRedderThan` z && z `allGreenerThan` y && z `allBluerThan` y) r1 && 
+allRedderThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `allRedderThan` z && z `allGreenerThan` y && z `allBluerThan` y) r1 &&
                                                          none (\z -> z `allRedderThan` x && x `allGreenerThan` z && x `allBluerThan` z) (g2++b2)
 allGreenerThan :: Threal -> Threal -> Bool
-allGreenerThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `allGreenerThan` z && z `allBluerThan` y && z `allRedderThan` y) g1 && 
+allGreenerThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `allGreenerThan` z && z `allBluerThan` y && z `allRedderThan` y) g1 &&
                                                           none (\z -> z `allGreenerThan` x && x `allBluerThan` z && x `allRedderThan` z) (b2++r2)
 allBluerThan :: Threal -> Threal -> Bool
-allBluerThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `allBluerThan` z && z `allRedderThan` y && z `allGreenerThan` y) b1 && 
+allBluerThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `allBluerThan` z && z `allRedderThan` y && z `allGreenerThan` y) b1 &&
                                                         none (\z -> z `allBluerThan` x && x `allRedderThan` z && x `allGreenerThan` z) (r2++g2)
 --
 
 anyRedderThan :: Threal -> Threal -> Bool
-anyRedderThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `anyRedderThan` z || z `anyGreenerThan` y || z `anyBluerThan` y) r1 && 
+anyRedderThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `anyRedderThan` z || z `anyGreenerThan` y || z `anyBluerThan` y) r1 &&
                                                          none (\z -> z `anyRedderThan` x || x `anyGreenerThan` z || x `anyBluerThan` z) (g2++b2)
 anyGreenerThan :: Threal -> Threal -> Bool
-anyGreenerThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `anyGreenerThan` z || z `anyBluerThan` y || z `anyRedderThan` y) g1 && 
+anyGreenerThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `anyGreenerThan` z || z `anyBluerThan` y || z `anyRedderThan` y) g1 &&
                                                           none (\z -> z `anyGreenerThan` x || x `anyBluerThan` z || x `anyRedderThan` z) (b2++r2)
 anyBluerThan :: Threal -> Threal -> Bool
-anyBluerThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `anyBluerThan` z || z `anyRedderThan` y || z `anyGreenerThan` y) b1 && 
+anyBluerThan x@(Threal r1 g1 b1) y@(Threal r2 g2 b2)  = none (\z -> y `anyBluerThan` z || z `anyRedderThan` y || z `anyGreenerThan` y) b1 &&
                                                         none (\z -> z `anyBluerThan` x || x `anyRedderThan` z || x `anyGreenerThan` z) (r2++g2)
 
 
@@ -372,7 +385,7 @@ bluerThanSame x@(Threal r1 g1 b1)  y@(Threal r2 g2 b2) = none (y `bluerThanSame`
 
 redderThan :: Threal -> Threal -> Bool
 redderThan = compRedder
- 
+
 greenerThan :: Threal -> Threal -> Bool
 greenerThan = compGreener
 
@@ -397,7 +410,7 @@ exactIn (x:xs) y
     | x === y = True
     | otherwise = exactIn xs y
 
-exactDiff x [] = x 
+exactDiff x [] = x
 exactDiff [] _ = []
 exactDiff (x:xs) y
     | exactIn y x = exactDiff xs y
@@ -429,30 +442,30 @@ exactNub (x:xs)
 fullComp :: Threal -> Threal -> IO ()
 fullComp x y = putStrLn $
                "Cross: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ redderThanCross y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ redderThanCross x y) ++ "\n" ++ 
+               show x ++ " >Red> "++ show y ++": " ++ (show $ redderThanCross y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ redderThanCross x y) ++ "\n" ++
                show x ++ " >Green> "++ show y ++": " ++ (show $ greenerThanCross y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ greenerThanCross x y) ++ "\n" ++
                show x ++" >Blue> "++ show y ++": " ++ (show $ bluerThanCross y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ bluerThanCross x y) ++  "\n" ++
                --"==: " ++ (show $ x =|= y) ++ "\t\t||: " ++ (show $ x ||| y) ++
                "Same: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ redderThanSame y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ redderThanSame x y) ++ "\n" ++ 
+               show x ++ " >Red> "++ show y ++": " ++ (show $ redderThanSame y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ redderThanSame x y) ++ "\n" ++
                show x ++ " >Green> "++ show y ++": " ++ (show $ greenerThanSame y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ greenerThanSame x y) ++ "\n" ++
                show x ++" >Blue> "++ show y ++": " ++ (show $ bluerThanSame y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ bluerThanSame x y) ++  "\n" ++
                "Full: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ fullyRedderThan y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ fullyRedderThan x y) ++ "\n" ++ 
+               show x ++ " >Red> "++ show y ++": " ++ (show $ fullyRedderThan y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ fullyRedderThan x y) ++ "\n" ++
                show x ++ " >Green> "++ show y ++": " ++ (show $ fullyGreenerThan y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ fullyGreenerThan x y) ++ "\n" ++
                show x ++" >Blue> "++ show y ++": " ++ (show $ fullyBluerThan y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ fullyBluerThan x y) ++  "\n"++
                "Rev Cross: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ revRedderThanCross y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revRedderThanCross x y) ++ "\n" ++ 
+               show x ++ " >Red> "++ show y ++": " ++ (show $ revRedderThanCross y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revRedderThanCross x y) ++ "\n" ++
                show x ++ " >Green> "++ show y ++": " ++ (show $ revGreenerThanCross y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ revGreenerThanCross x y) ++ "\n" ++
                show x ++" >Blue> "++ show y ++": " ++ (show $ revBluerThanCross y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ revBluerThanCross x y) ++  "\n" ++
                "Rev Same: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ revRedderThanSame y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revRedderThanSame x y) ++ "\n" ++ 
+               show x ++ " >Red> "++ show y ++": " ++ (show $ revRedderThanSame y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revRedderThanSame x y) ++ "\n" ++
                show x ++ " >Green> "++ show y ++": " ++ (show $ revGreenerThanSame y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ revGreenerThanSame x y) ++ "\n" ++
                show x ++" >Blue> "++ show y ++": " ++ (show $ revBluerThanSame y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ revBluerThanSame x y) ++  "\n" ++
                "Rev Full: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ revFullyRedderThan y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revFullyRedderThan x y) ++ "\n" ++ 
+               show x ++ " >Red> "++ show y ++": " ++ (show $ revFullyRedderThan y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revFullyRedderThan x y) ++ "\n" ++
                show x ++ " >Green> "++ show y ++": " ++ (show $ revFullyGreenerThan y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ revFullyGreenerThan x y) ++ "\n" ++
-               show x ++" >Blue> "++ show y ++": " ++ (show $ revFullyBluerThan y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ revFullyBluerThan x y) ++  "\n" 
+               show x ++" >Blue> "++ show y ++": " ++ (show $ revFullyBluerThan y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ revFullyBluerThan x y) ++  "\n"
 
 
 (<>) :: Threal -> Threal -> IO ()
@@ -559,19 +572,41 @@ uniqueFields (Threal r g b) = Threal (nub r) (nub g) (nub b)
 completelyUnique :: Threal -> Threal
 completelyUnique (Threal r g b) = Threal (nub (map completelyUnique r)) (nub (map completelyUnique g)) (nub (map completelyUnique b))
 
-dominate :: Threal -> Threal
-dominate x = Threal redOpts greenOpts blueOpts
-  where (Threal uniqueR uniqueG uniqueB) = uniqueFields x
-        dR = map dominate uniqueR
-        dB = map dominate uniqueB
-        dG = map dominate uniqueG
-        noneLess comp l x = none (\z -> comp z x) (l \\ [x])
-        redOpts = dR `seq` filter (noneLess redderThan dR) dR
-        greenOpts = dG `seq` filter (noneLess greenerThan dG) dG
-        blueOpts = dB `seq` filter (noneLess bluerThan dB) dB
+-- dominate :: Threal -> Threal
+-- dominate x = Threal redOpts greenOpts blueOpts
+--   where (Threal uniqueR uniqueG uniqueB) = uniqueFields x
+--         dR = map dominate uniqueR
+--         dB = map dominate uniqueB
+--         dG = map dominate uniqueG
+--         noneLess comp l x = none (\z -> comp z x) (l \\ [x])
+--         redOpts = dR `seq` filter (noneLess redderThan dR) dR
+--         greenOpts = dG `seq` filter (noneLess greenerThan dG) dG
+--         blueOpts = dB `seq` filter (noneLess bluerThan dB) dB
 
-nand = not . and
-nor = not . or
+dominate :: Threal -> Threal
+dominate x = evalState (dominateState x) M.empty
+
+dominateState :: Monad m => Threal -> StateT (HashMap Threal Threal) m Threal
+dominateState x = do
+  cache <- get
+  case M.lookup x cache of
+    Just y -> return y
+    Nothing -> do
+      let (Threal uniqueR uniqueG uniqueB) = uniqueFields x
+          (dR, redState) = runState (traverse dominateState uniqueR) cache
+          (dG, greenState) = runState (traverse dominateState uniqueG) redState
+          (dB, blueState) = runState (traverse dominateState uniqueB) greenState
+      let redOpts = dR `seq` filter (noneLess redderThan dR) dR
+          greenOpts = dG `seq` filter (noneLess greenerThan dG) dG
+          blueOpts = dB `seq` filter (noneLess bluerThan dB) dB
+      let res = Threal redOpts greenOpts blueOpts
+          updatedCache = M.insert x res blueState
+      put updatedCache
+      return res
+  where noneLess comp l x = none (\z -> comp z x) (l \\ [x])
+
+--nand = not . and
+--nor = not . or
 
 compReversible :: (Threal -> Threal -> Bool) -> (Threal -> [Threal]) -> (Threal -> [Threal]) -> (Threal -> [Threal] -> Threal) -> (Threal -> [Threal] -> Threal) -> Threal -> Threal
 compReversible comp fstGet sndGet fstSet sndSet x = sndSet (fstSet x mapped1) mapped2
@@ -584,7 +619,7 @@ rgReversible = compReversible compRedGreen redPart greenPart replaceRed replaceG
 gbReversible = compReversible compGreenBlue greenPart bluePart replaceGreen replaceBlue
 brReversible = compReversible compBlueRed bluePart redPart replaceBlue replaceRed
 
-rgbReversible = brReversible . gbReversible . rgReversible 
+rgbReversible = brReversible . gbReversible . rgReversible
 
 reversible :: Threal -> Threal
 reversible x = Threal redOpts greenOpts blueOpts
@@ -607,6 +642,38 @@ reversible x = Threal redOpts greenOpts blueOpts
         redOpts = rR `seq` concatMap redComp rR
         greenOpts = rG `seq` concatMap greenComp rG
         blueOpts = rB `seq` concatMap blueComp rB
+
+reversibleState :: Monad m => Threal -> StateT (HashMap Threal Threal) m Threal
+reversibleState x = do
+  cache <- get
+  case M.lookup x cache of
+    Just y -> return y
+    Nothing -> do
+      let
+        ux@(Threal uniqueR uniqueG uniqueB) = uniqueFields x
+        (rR, redState) = runState (traverse reversibleState uniqueR) cache
+        (rG, greenState) = runState (traverse reversibleState uniqueG) redState
+        (rB, blueState) = runState (traverse reversibleState uniqueB) greenState
+        redComp r@(Threal rr rg rb)
+            | not $ null gbBetter = concatMap redPart gbBetter
+            | otherwise = [r]
+            where gbBetter = filter (\z -> z `compGreener` x && z `compBluer` x) (rg++rb)
+        greenComp g@(Threal gr gg gb)
+            | not $ null brBetter = concatMap greenPart brBetter
+            | otherwise = [g]
+            where brBetter = filter (\z -> z `compBluer` x && z `compRedder` x) (gb++gr)
+        blueComp b@(Threal br bg bb)
+            | not $ null rgBetter = concatMap bluePart rgBetter
+            | otherwise = [b]
+            where rgBetter = filter (\z -> z `compRedder` x && z `compGreener` x) (br++bg)
+        redOpts = rR `seq` concatMap redComp rR
+        greenOpts = rG `seq` concatMap greenComp rG
+        blueOpts = rB `seq` concatMap blueComp rB
+        res = Threal redOpts greenOpts blueOpts
+        updatedCache = M.insert x res blueState
+      put updatedCache
+      return res
+
         --rtx z = z `redderThan` x
         --gtx z = z `greenerThan` x
         --btx z = z `bluerThan` x
@@ -634,11 +701,11 @@ instance Show ThrealTree where
 
 showTTree TThunk _ = "_"
 showTTree (TNode []) _ = ""
-showTTree (TNode ((t, r, g, b) : nxt)) depth 
+showTTree (TNode ((t, r, g, b) : nxt)) depth
     | t === tzero = show t ++ nxtStr nxt
-    | otherwise = show t ++ " " ++ arrow ++ indent ++ 
-                  (colorify redColour   $ "\n" ++ indent ++ "Red:   ")   ++ (showTTree r ndepth) ++ 
-                  (colorify greenColour $ "\n" ++ indent ++ "Green: ") ++ (showTTree g ndepth) ++ 
+    | otherwise = show t ++ " " ++ arrow ++ indent ++
+                  (colorify redColour   $ "\n" ++ indent ++ "Red:   ")   ++ (showTTree r ndepth) ++
+                  (colorify greenColour $ "\n" ++ indent ++ "Green: ") ++ (showTTree g ndepth) ++
                   (colorify blueColour  $ "\n" ++ indent ++ "Blue:  ")  ++ (showTTree b ndepth) ++
                   "\n" ++ nxtStr nxt
     where ndepth = succ depth
@@ -652,10 +719,10 @@ instance Show ImpartialTree where
 
 showITree IThunk _ = "_"
 showITree (INode []) _ = ""
-showITree (INode ((t, r) : nxt)) depth 
+showITree (INode ((t, r) : nxt)) depth
     | t === tzero = show t ++ nxtStr nxt
-    | otherwise = show t ++ " " ++ arrow ++ indent ++ 
-                  "\n" ++ indent ++  (showITree r ndepth) ++ 
+    | otherwise = show t ++ " " ++ arrow ++ indent ++
+                  "\n" ++ indent ++  (showITree r ndepth) ++
                   "\n" ++ nxtStr nxt
     where ndepth = succ depth
           indent = take depth $ repeat '\t'
@@ -763,7 +830,7 @@ showThreal (Threal [Threal [] [(Threal [] [] [])] [(Threal [] [] [])]] [Threal [
 showThreal (Threal [Threal [] [(Threal [] [] [])] [(Threal [] [] [])]] [Threal [(Threal [] [] [])] [] [(Threal [] [] [])]] [Threal [] [(Threal [] [] [])] [(Threal [] [] [])], Threal [(Threal [] [] [])] [] [(Threal [] [] [])]]) = " $b "
 showThreal (Threal [Threal [] [(Threal [] [] [])] [(Threal [] [] [])]] [Threal [(Threal [] [] [])] [] [(Threal [] [] [])]] [Threal [(Threal [] [] [])] [] [(Threal [] [] [])], Threal [] [(Threal [] [] [])] [(Threal [] [] [])]]) = " $b "
 
-showThreal t@(Threal r g b) 
+showThreal t@(Threal r g b)
     | t === (timber 2) = " 2* "
     | t === (timber 3) = " 3* "
     | t === (timber 4) = " 4* "
@@ -796,6 +863,8 @@ allComp = [allRedderThan, allGreenerThan, allBluerThan]
 relComp = [eqRedGreen, eqGreenBlue, eqBlueRed]
 fullRelComp = [fullEqRedGreen, fullEqGreenBlue, fullEqBlueRed]
 allComps = [relComp, fullRelComp, crossComp, sameComp, fullyComp]
+
+workingComps = [fullRelComp, crossComp, fullyComp]
 
 zeroEquivalent compList = [x | x <- options, allThreeComp compList x tzero]
 
@@ -908,23 +977,39 @@ dominateCL compList@(rt:gt:bt:[]) (Threal r g b) = Threal redOpts greenOpts blue
 
 -- printTestComp compList domList = putStrLn $ concat $ testCompAddition compList domList
 
-testAddition x y = if (and res) then ""
-                   else "Failed: " ++ show x ++ ", " ++ show y ++ ": " ++ show res ++ "\n"
-  where compare = allThreeComp relComp
-        us = threalAdd x y
-        cu = completelyUnique us
-        d  = dominate cu
-        dus = dominate us
-        rus = reversible us
-        rcu = reversible cu
-        rd  = reversible d
-        res = [compare us cu] ++ [compare cu d, compare us dus] ++ [compare rus us, compare rcu cu, compare rd d, compare rd us]
-        fullRes = map (\(a, _) -> a) $ filter (\(_, b) -> b) $ zip [[us, cu], [cu, d], [us, dus], [rus, us], [rcu, cu], [rd, d], [rd, us]] res
+testAddition :: [Threal -> Threal -> Bool] -> Int -> Threal -> Threal -> StateT (HashMap Threal Threal, HashMap Threal Threal) IO ()
+testAddition fs n x y = do
+    (domCache, revCache) <- get
+    let
+      us = threalAdd x y
+      cu = completelyUnique us
+      (d, dCache)  = runState (dominateState cu) domCache
+      (dus, dusCache) = runState (dominateState us) dCache
+      (rus, rusCache) = runState (reversibleState us) revCache
+      (rcu, rcuCache) = runState (reversibleState cu) rusCache
+      (rd, rdCache)  = runState (reversibleState d) rcuCache
+      res = [compare us cu] ++ [compare cu d, compare us dus] ++ [compare rus us, compare rcu cu, compare rd d, compare rd us]
+      fullRes = map fst $ filter snd $ zip [[us, cu], [cu, d], [us, dus], [rus, us], [rcu, cu], [rd, d], [rd, us]] res
+    when (not $ and res) (liftIO $ putStr $ pointer ++ "Failed: " ++ show x ++ ", " ++ show y ++ ": " ++ show res ++ "\n")
+    put (dusCache, rdCache)
+  where compare = allThreeComp fs -- relComp
+        stars = replicate n '*'
+        pointer = stars ++ "-> "
 
-testCompAddition = allOpts `seq` [testAddition x y | x <- allOpts, y <- allOpts]
+testCompAddition :: Int -> [Threal -> Threal -> Bool] -> StateT (HashMap Threal Threal, HashMap Threal Threal) IO [()]
+testCompAddition n fs = allOpts `seq` traverse (uncurry $ testAddition fs n) [(x, y) | x <- allOpts, y <- allOpts]
 
-printTestComp = putStrLn $ concat $ testCompAddition
+testAllCompsAddition :: IO ()
+testAllCompsAddition = evalStateT (traverse (\(f, i) -> (liftIO $ putStrLn "-------") >> testCompAddition i f) indexedComps) (M.empty, M.empty) >> return ()
+  where indexedComps = zip workingComps [1..]
 
+-- printTestComps = traverse (putStrLn . concat . testCompAddition $ fs) allComps
+
+-- printTestComp fs = putStrLn $ concat $ testCompAddition fs
+
+-- printAllTestComps = traverse (\fs -> putStrLn "---" >> printTestComp fs) allComps
+
+-- printWorkingTestComps = traverse (\fs -> putStrLn "---" >> printTestComp fs) workingComps
 
 testAssociativity x y z = ((x + y) + z) =|= (x + (y + z))
 
