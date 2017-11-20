@@ -5,7 +5,7 @@ import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
 import Data.Hashable
 import Control.Applicative( (<$>), (<*>), pure )
-import Control.Monad (when, mapM)
+import Control.Monad (when, mapM, mapM_)
 import Control.Monad.State (State, get, put, runState, evalState, StateT, liftIO, evalStateT)
 
 data Threal = Threal [Threal] [Threal] [Threal]
@@ -25,6 +25,12 @@ data ImpartialTree = IThunk | INode [(Threal, ImpartialTree)]
 data Winner = C | P | N | U deriving (Show, Eq)
 data WinnerTree = WLeaf Winner | WNode [WinnerTree] deriving (Eq)
 
+data Comps = Comps { redComp :: (Threal -> Threal -> Bool)
+                   , greenComp :: (Threal -> Threal -> Bool)
+                   , blueComp :: (Threal -> Threal -> Bool)
+                   }
+
+rotateWinnerBack :: Winner -> Winner
 rotateWinnerBack C = N
 rotateWinnerBack N = P
 rotateWinnerBack P = C
@@ -42,15 +48,18 @@ concatWTrees (WNode (x : [])) y@(WLeaf _) = WNode [y, x]
 concatWTrees y@(WLeaf _) (WNode (x : [])) = WNode [y, x]
 concatWTrees tree1 tree2 = WNode [tree1, tree2]
 
+pruneWTree :: WinnerTree -> WinnerTree
 pruneWTree x@(WLeaf _) = x
 pruneWTree (WNode (x@(WLeaf _) : [])) = x
 pruneWTree y = y
 
+makeTern :: Int -> Int -> [Int]
 makeTern num 0   = [num]
 makeTern num pow = rem : makeTern (num - rem*base) (pow - 1)
     where base = 3^pow
           rem = num `div` base
 
+ternAdd :: Int -> Int -> Int
 ternAdd x y = modSum
     where maxNum = max x y
           maxPow = fst $ head $ dropWhile (\(a,b) -> b < maxNum) $ map (\n -> (n, 3 ^ n)) [0..]
@@ -68,6 +77,7 @@ makeWBranch ws = WNode (map WLeaf ws)
 makeWBush :: [[Winner]] -> WinnerTree
 makeWBush wss = WNode (map makeWBranch wss)
 
+concatITrees :: ImpartialTree -> ImpartialTree -> ImpartialTree
 concatITrees IThunk x = x
 concatITrees x IThunk = x
 concatITrees (INode as) (INode bs) = INode (as++bs)
@@ -111,17 +121,17 @@ fullStar = Threal [star] [star] [star]
 rainbowStar = red + green + blue
 negRainbowStar = negRed + negGreen + negBlue
 
-threalNum :: Threal -> Integer -> Threal
-threalNum t n = completelyUnique $ foldl' (\acc n -> threalAdd acc t) tzero [1..n]
+threalNum :: Comps -> Threal -> Integer -> Threal
+threalNum c t n = completelyUnique c $ foldl' (\acc n -> threalAdd acc t) tzero [1..n]
 
 redNum :: Integer -> Threal
-redNum = threalNum red
+redNum = threalNum allComp red
 
 greenNum :: Integer -> Threal
-greenNum = threalNum green
+greenNum = threalNum allComp green
 
 blueNum :: Integer -> Threal
-blueNum = threalNum blue
+blueNum = threalNum allComp blue
 
 timber :: Integer -> Threal
 timber 0 = tzero
@@ -566,11 +576,18 @@ calculateImpartial stacks = timberStack `seq` foldedVal `seq` gameTree `seq` cal
 
 -- Simplifications
 
-uniqueFields :: Threal -> Threal
-uniqueFields (Threal r g b) = Threal (nub r) (nub g) (nub b)
+nubComps :: Comps -> [Threal] -> [Threal]
+nubComps c ts = nubBy eqC ts
+  where eqC t s = (redComp c) t s && (greenComp c) t s && (blueComp c) t s
 
-completelyUnique :: Threal -> Threal
-completelyUnique (Threal r g b) = Threal (nub (map completelyUnique r)) (nub (map completelyUnique g)) (nub (map completelyUnique b))
+uniqueFields :: Comps -> Threal -> Threal
+uniqueFields c (Threal r g b) = Threal (nubC r) (nubC g) (nubC b)
+  where nubC = nubComps c
+
+completelyUnique :: Comps -> Threal -> Threal
+completelyUnique c (Threal r g b) = Threal (nubC (map cuc r)) (nubC (map cuc g)) (nubC (map cuc b))
+  where cuc = completelyUnique c
+        nubC = nubComps c
 
 -- dominate :: Threal -> Threal
 -- dominate x = Threal redOpts greenOpts blueOpts
@@ -584,26 +601,30 @@ completelyUnique (Threal r g b) = Threal (nub (map completelyUnique r)) (nub (ma
 --         blueOpts = dB `seq` filter (noneLess bluerThan dB) dB
 
 dominate :: Threal -> Threal
-dominate x = evalState (dominateState x) M.empty
+dominate x = evalState (dominateState relComp x) M.empty
 
-dominateState :: Monad m => Threal -> StateT (HashMap Threal Threal) m Threal
-dominateState x = do
+dominateC :: Comps -> Threal -> Threal
+dominateC c x = evalState (dominateState c x) M.empty
+
+dominateState :: Monad m => Comps -> Threal -> StateT (HashMap Threal Threal) m Threal
+dominateState c x = do
   cache <- get
   case M.lookup x cache of
     Just y -> return y
     Nothing -> do
-      let (Threal uniqueR uniqueG uniqueB) = uniqueFields x
-          (dR, redState) = runState (traverse dominateState uniqueR) cache
-          (dG, greenState) = runState (traverse dominateState uniqueG) redState
-          (dB, blueState) = runState (traverse dominateState uniqueB) greenState
-      let redOpts = dR `seq` filter (noneLess redderThan dR) dR
-          greenOpts = dG `seq` filter (noneLess greenerThan dG) dG
-          blueOpts = dB `seq` filter (noneLess bluerThan dB) dB
+      let (Threal uniqueR uniqueG uniqueB) = uniqueFields c x
+          (dR, redState) = runState (traverse dsc uniqueR) cache
+          (dG, greenState) = runState (traverse dsc uniqueG) redState
+          (dB, blueState) = runState (traverse dsc uniqueB) greenState
+      let redOpts = dR `seq` filter (noneLess (redComp c) dR) dR
+          greenOpts = dG `seq` filter (noneLess (greenComp c) dG) dG
+          blueOpts = dB `seq` filter (noneLess (blueComp c) dB) dB
       let res = Threal redOpts greenOpts blueOpts
           updatedCache = M.insert x res blueState
       put updatedCache
       return res
-  where noneLess comp l x = none (\z -> comp z x) (l \\ [x])
+  where noneLess comp l a = none (a `comp`) (l \\ [a])
+        dsc = dominateState c
 
 --nand = not . and
 --nor = not . or
@@ -623,7 +644,7 @@ rgbReversible = brReversible . gbReversible . rgReversible
 
 reversible :: Threal -> Threal
 reversible x = Threal redOpts greenOpts blueOpts
-  where ux@(Threal uniqueR uniqueG uniqueB) = uniqueFields x
+  where ux@(Threal uniqueR uniqueG uniqueB) = uniqueFields allComp x
         rR = map reversible uniqueR
         rG = map reversible uniqueG
         rB = map reversible uniqueB
@@ -643,36 +664,46 @@ reversible x = Threal redOpts greenOpts blueOpts
         greenOpts = rG `seq` concatMap greenComp rG
         blueOpts = rB `seq` concatMap blueComp rB
 
-reversibleState :: Monad m => Threal -> StateT (HashMap Threal Threal) m Threal
-reversibleState x = do
+reversibleC :: Comps -> Threal -> Threal
+reversibleC c x = evalState (reversibleState c x) M.empty
+
+reversibleState :: Monad m => Comps -> Threal -> StateT (HashMap Threal Threal) m Threal
+reversibleState c x = do
   cache <- get
   case M.lookup x cache of
     Just y -> return y
     Nothing -> do
       let
-        ux@(Threal uniqueR uniqueG uniqueB) = uniqueFields x
-        (rR, redState) = runState (traverse reversibleState uniqueR) cache
-        (rG, greenState) = runState (traverse reversibleState uniqueG) redState
-        (rB, blueState) = runState (traverse reversibleState uniqueB) greenState
-        redComp r@(Threal rr rg rb)
+        (Threal uniqueR uniqueG uniqueB) = uniqueFields c x
+        (rR, redState) = runState (traverse rsc uniqueR) cache
+        (rG, greenState) = runState (traverse rsc uniqueG) redState
+        (rB, blueState) = runState (traverse rsc uniqueB) greenState
+        rComp r@(Threal rr rg rb)
             | not $ null gbBetter = concatMap redPart gbBetter
             | otherwise = [r]
-            where gbBetter = filter (\z -> z `compGreener` x && z `compBluer` x) (rg++rb)
-        greenComp g@(Threal gr gg gb)
+            where
+              --gbBetter = filter ((redComp c) x) (rg++rb)
+              gbBetter = filter (\z -> greenComp c z x && blueComp c z x && redComp c x z) (rg++rb)
+        gComp g@(Threal gr gg gb)
             | not $ null brBetter = concatMap greenPart brBetter
             | otherwise = [g]
-            where brBetter = filter (\z -> z `compBluer` x && z `compRedder` x) (gb++gr)
-        blueComp b@(Threal br bg bb)
+            where
+              -- brBetter = filter ((greenComp c) x) (gb++gr)
+              brBetter = filter (\z -> blueComp c z x && redComp c z x && greenComp c x z) (gb++gr)
+        bComp b@(Threal br bg bb)
             | not $ null rgBetter = concatMap bluePart rgBetter
             | otherwise = [b]
-            where rgBetter = filter (\z -> z `compRedder` x && z `compGreener` x) (br++bg)
-        redOpts = rR `seq` concatMap redComp rR
-        greenOpts = rG `seq` concatMap greenComp rG
-        blueOpts = rB `seq` concatMap blueComp rB
+            where
+              --rgBetter = filter ((blueComp c) x) (br++bg)
+              rgBetter = filter (\z -> redComp c z x && greenComp c z x && blueComp c x z) (br++bg)
+        redOpts = rR `seq` concatMap rComp rR
+        greenOpts = rG `seq` concatMap gComp rG
+        blueOpts = rB `seq` concatMap bComp rB
         res = Threal redOpts greenOpts blueOpts
         updatedCache = M.insert x res blueState
       put updatedCache
       return res
+  where rsc = reversibleState c
 
         --rtx z = z `redderThan` x
         --gtx z = z `greenerThan` x
@@ -688,9 +719,15 @@ reversibleState x = do
         --     where brest b = redPart b ++ greenPart b
 
 simplify :: Threal -> Threal
-simplify x = x `seq` completelyUnique x
+simplify x = x `seq` completelyUnique allComp x
 
--- Show Instance
+simplifyC :: Comps -> Threal -> Threal
+simplifyC c x = completelyUnique c x
+
+addC :: Comps -> Threal -> Threal -> Threal
+addC c x y = simplifyC c $ threalAdd x y
+
+  -- Show Instance
 
 instance Show WinnerTree where
     show (WLeaf x) = show x
@@ -844,26 +881,31 @@ showThreal t@(Threal r g b)
 
 options = [tzero, red, green, blue, star, negRed, negGreen, negBlue, fullStar, rainbowStar, negRainbowStar, redArrow, greenArrow, blueArrow, negRedArrow, negGreenArrow, negBlueArrow, redNum 2, greenNum 2, blueNum 2, redStar, greenStar, blueStar, allRed, allGreen, allBlue, swapRG, swapGB, swapBR, redSink, greenSink, blueSink, redSource, greenSource, blueSource, staleRed, staleGreen, staleBlue, notRed, notGreen, notBlue, redGoneGreen, redGoneBlue, greenGoneRed, greenGoneBlue, blueGoneRed, blueGoneGreen, revenge, sophiesStar, clockwiseStar, anticlockwiseStar, timber 2, timber 3]
 
---allOpts = [ x + y | x <- options, y <- options, x /= y]
---allOpts = [tzero, red, green, blue, star, rainbowStar, fullStar, negRed, negGreen, negBlue]
-allOpts = options
---allOpts = options `seq` options ++ ((+) <$> options <*> pure red) ++ ((+) <$> options <*> pure green)
+allOpts = [ x + y | x <- options, y <- options, x /= y]
+shortOpts = [tzero, red, green, blue, star, rainbowStar, fullStar, negRed, negGreen, negBlue]
+moreOpts = options `seq` options ++ ((+) <$> options <*> pure red) ++ ((+) <$> options <*> pure green)
 
-allThreeComp [rComp, gComp, bComp] x y = rComp x y && gComp x y && bComp x y
+allThreeComp :: Comps -> Threal -> Threal -> Bool
+allThreeComp comps x y = redComp comps x y && greenComp comps x y && blueComp comps x y
+
+notComp :: Comps -> Threal -> Threal -> Bool
 notComp c x y = not $ allThreeComp c x y
 
-crossComp = [redderThanCross, greenerThanCross, bluerThanCross]
-sameComp = [redderThanSame, greenerThanSame, bluerThanSame]
-fullyComp = [fullyRedderThan, fullyGreenerThan, fullyBluerThan]
-revCrossComp = [revRedderThanCross, revGreenerThanCross, revBluerThanCross]
-revSameComp = [revRedderThanSame, revGreenerThanSame, revBluerThanSame]
-revFullyComp = [revFullyRedderThan, revFullyGreenerThan, revFullyBluerThan]
-anyComp = [anyRedderThan, anyGreenerThan, anyBluerThan]
-allComp = [allRedderThan, allGreenerThan, allBluerThan]
-relComp = [eqRedGreen, eqGreenBlue, eqBlueRed]
-fullRelComp = [fullEqRedGreen, fullEqGreenBlue, fullEqBlueRed]
-allComps = [relComp, fullRelComp, crossComp, sameComp, fullyComp]
+crossComp = Comps redderThanCross greenerThanCross bluerThanCross
+sameComp = Comps redderThanSame  greenerThanSame  bluerThanSame
+fullyComp = Comps fullyRedderThan fullyGreenerThan fullyBluerThan
+revCrossComp = Comps revRedderThanCross revGreenerThanCross revBluerThanCross
+revSameComp = Comps revRedderThanSame revGreenerThanSame revBluerThanSame
+revFullyComp = Comps revFullyRedderThan revFullyGreenerThan revFullyBluerThan
+anyComp = Comps anyRedderThan anyGreenerThan anyBluerThan
+allComp = Comps allRedderThan allGreenerThan allBluerThan
+relComp = Comps eqRedGreen eqGreenBlue eqBlueRed
+fullRelComp = Comps fullEqRedGreen fullEqGreenBlue fullEqBlueRed
 
+allComps :: [Comps]
+allComps = [relComp, fullRelComp, crossComp, sameComp, fullyComp, allComp]
+
+workingComps :: [Comps]
 workingComps = [fullRelComp, crossComp, fullyComp]
 
 zeroEquivalent compList = [x | x <- options, allThreeComp compList x tzero]
@@ -977,30 +1019,33 @@ dominateCL compList@(rt:gt:bt:[]) (Threal r g b) = Threal redOpts greenOpts blue
 
 -- printTestComp compList domList = putStrLn $ concat $ testCompAddition compList domList
 
-testAddition :: [Threal -> Threal -> Bool] -> Int -> Threal -> Threal -> StateT (HashMap Threal Threal, HashMap Threal Threal) IO ()
+testAddition :: Comps -> Int -> Threal -> Threal -> StateT (HashMap Threal Threal, HashMap Threal Threal) IO ()
 testAddition fs n x y = do
     (domCache, revCache) <- get
     let
       us = threalAdd x y
-      cu = completelyUnique us
-      (d, dCache)  = runState (dominateState cu) domCache
-      (dus, dusCache) = runState (dominateState us) dCache
-      (rus, rusCache) = runState (reversibleState us) revCache
-      (rcu, rcuCache) = runState (reversibleState cu) rusCache
-      (rd, rdCache)  = runState (reversibleState d) rcuCache
+      cu = cuc us
+      (d, dCache)  = runState (dsc cu) domCache
+      (dus, dusCache) = runState (dsc us) dCache
+      (rus, rusCache) = runState (rsc us) revCache
+      (rcu, rcuCache) = runState (rsc cu) rusCache
+      (rd, rdCache)  = runState (rsc d) rcuCache
       res = [compare us cu] ++ [compare cu d, compare us dus] ++ [compare rus us, compare rcu cu, compare rd d, compare rd us]
-      fullRes = map fst $ filter snd $ zip [[us, cu], [cu, d], [us, dus], [rus, us], [rcu, cu], [rd, d], [rd, us]] res
+      -- fullRes = map fst $ filter snd $ zip [[us, cu], [cu, d], [us, dus], [rus, us], [rcu, cu], [rd, d], [rd, us]] res
     when (not $ and res) (liftIO $ putStr $ pointer ++ "Failed: " ++ show x ++ ", " ++ show y ++ ": " ++ show res ++ "\n")
     put (dusCache, rdCache)
-  where compare = allThreeComp fs -- relComp
+  where compare = allThreeComp fs
         stars = replicate n '*'
         pointer = stars ++ "-> "
+        cuc = completelyUnique fs
+        dsc = dominateState fs
+        rsc = reversibleState fs
 
-testCompAddition :: Int -> [Threal -> Threal -> Bool] -> StateT (HashMap Threal Threal, HashMap Threal Threal) IO [()]
-testCompAddition n fs = allOpts `seq` traverse (uncurry $ testAddition fs n) [(x, y) | x <- allOpts, y <- allOpts]
+testCompAddition :: Int -> Comps -> IO [()]
+testCompAddition n fs = allOpts `seq` mapM (\(x,y) -> evalStateT (testAddition fs n x y) (M.empty, M.empty)) [(x, y) | x <- shortOpts, y <- options]
 
 testAllCompsAddition :: IO ()
-testAllCompsAddition = evalStateT (traverse (\(f, i) -> (liftIO $ putStrLn "-------") >> testCompAddition i f) indexedComps) (M.empty, M.empty) >> return ()
+testAllCompsAddition = mapM_ (\(f, i) -> liftIO (putStrLn "-------") >> testCompAddition i f) indexedComps >> return ()
   where indexedComps = zip workingComps [1..]
 
 -- printTestComps = traverse (putStrLn . concat . testCompAddition $ fs) allComps
