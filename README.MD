@@ -1,4 +1,4 @@
-#Threals
+# Threals
 
 The [Surreal Numbers](https://en.wikipedia.org/wiki/Surreal_number "Surreal Number") are both an elegant way of interpreting real numbers (and beyond), as well as a subset of [Combinatorial Game Theory](https://en.wikipedia.org/wiki/Combinatorial_game_theory "Combinatorial Game Theory") (CGT) for two players.
 
