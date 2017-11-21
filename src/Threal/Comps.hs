@@ -190,39 +190,6 @@ exactNub (x:xs)
 
 (|||) :: Threal -> Threal -> Bool
 (|||) x y = (not $ redderThan x y) && (not $ greenerThan x y) && (not $ bluerThan x y)
-
-fullComp :: Threal -> Threal -> IO ()
-fullComp x y = putStrLn $
-               "Cross: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ redderThanCross y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ redderThanCross x y) ++ "\n" ++
-               show x ++ " >Green> "++ show y ++": " ++ (show $ greenerThanCross y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ greenerThanCross x y) ++ "\n" ++
-               show x ++" >Blue> "++ show y ++": " ++ (show $ bluerThanCross y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ bluerThanCross x y) ++  "\n" ++
-               --"==: " ++ (show $ x =|= y) ++ "\t\t||: " ++ (show $ x ||| y) ++
-               "Same: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ redderThanSame y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ redderThanSame x y) ++ "\n" ++
-               show x ++ " >Green> "++ show y ++": " ++ (show $ greenerThanSame y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ greenerThanSame x y) ++ "\n" ++
-               show x ++" >Blue> "++ show y ++": " ++ (show $ bluerThanSame y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ bluerThanSame x y) ++  "\n" ++
-               "Full: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ fullyRedderThan y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ fullyRedderThan x y) ++ "\n" ++
-               show x ++ " >Green> "++ show y ++": " ++ (show $ fullyGreenerThan y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ fullyGreenerThan x y) ++ "\n" ++
-               show x ++" >Blue> "++ show y ++": " ++ (show $ fullyBluerThan y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ fullyBluerThan x y) ++  "\n"++
-               "Rev Cross: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ revRedderThanCross y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revRedderThanCross x y) ++ "\n" ++
-               show x ++ " >Green> "++ show y ++": " ++ (show $ revGreenerThanCross y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ revGreenerThanCross x y) ++ "\n" ++
-               show x ++" >Blue> "++ show y ++": " ++ (show $ revBluerThanCross y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ revBluerThanCross x y) ++  "\n" ++
-               "Rev Same: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ revRedderThanSame y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revRedderThanSame x y) ++ "\n" ++
-               show x ++ " >Green> "++ show y ++": " ++ (show $ revGreenerThanSame y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ revGreenerThanSame x y) ++ "\n" ++
-               show x ++" >Blue> "++ show y ++": " ++ (show $ revBluerThanSame y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ revBluerThanSame x y) ++  "\n" ++
-               "Rev Full: \n" ++
-               show x ++ " >Red> "++ show y ++": " ++ (show $ revFullyRedderThan y x) ++ "\t\t" ++ show x ++" <Red< "++ show y ++": " ++ (show $ revFullyRedderThan x y) ++ "\n" ++
-               show x ++ " >Green> "++ show y ++": " ++ (show $ revFullyGreenerThan y x) ++ "\t\t"++ show x ++" <Green< "++ show y++ ": " ++ (show $ revFullyGreenerThan x y) ++ "\n" ++
-               show x ++" >Blue> "++ show y ++": " ++ (show $ revFullyBluerThan y x) ++ "\t\t"++ show x++" <Blue< "++ show y ++": " ++ (show $ revFullyBluerThan x y) ++  "\n"
-
-
-(<>) :: Threal -> Threal -> IO ()
-(<>) = fullComp
-
 signature :: Threal -> Threal -> [Bool]
 signature x y = [x `redderThan` y, x `greenerThan` y, x `bluerThan` y, y `redderThan` x, y `greenerThan` x, y `bluerThan` x]
 

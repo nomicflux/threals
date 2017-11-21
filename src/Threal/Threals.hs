@@ -26,17 +26,20 @@ negBlue = Threal [tzero] [tzero] []
 
 fullStar = Threal [star] [star] [star]
 
-rainbowStar = red + green + blue
-negRainbowStar = negRed + negGreen + negBlue
+rainbowStar = threalAdd (threalAdd red green) blue
+negRainbowStar = threalAdd (threalAdd negRed negGreen) negBlue
+
+threalNum :: Threal -> Integer -> Threal
+threalNum t n = foldl (\acc n -> threalAdd acc t) tzero [1..n]
 
 redNum :: Integer -> Threal
-redNum = threalNum allComp red
+redNum = threalNum red
 
 greenNum :: Integer -> Threal
-greenNum = threalNum allComp green
+greenNum = threalNum green
 
 blueNum :: Integer -> Threal
-blueNum = threalNum allComp blue
+blueNum = threalNum blue
 
 redStar = Threal [star] [] []
 greenStar = Threal [] [star] []

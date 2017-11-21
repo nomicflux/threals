@@ -19,8 +19,6 @@ library
                      , Threal.Threals
                      , Threal.Comps
                      , Threal.Show
-                     , Threal.ThrealM
-                     , Threal.Tests
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5
                      , mtl >= 2.2.1
