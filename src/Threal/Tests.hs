@@ -1,6 +1,6 @@
 module Threal.Tests where
 
-import Threal
+import Threal.Base
 import Threal.Comps
 import Threal.ThrealM
 

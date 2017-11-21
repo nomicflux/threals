@@ -1,6 +1,6 @@
 module Threal.Turns where
 
-import Threal
+import Threal.Base
 import Threal.Comps
 
 nextTurn :: Threal -> [Threal]

@@ -1,6 +1,7 @@
 module Threal.ThrealM where
 
-import Threal
+import Threal.Base
+
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
 import Control.Monod.Reader

@@ -1,6 +1,6 @@
 module Threal.Threals where
 
-import Threal
+import Threal.Base
 
 tzero :: Threal
 tzero = Threal [] [] []

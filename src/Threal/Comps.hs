@@ -1,6 +1,6 @@
 module Threal.Comps where
 
-import Threal
+import Threal.Base
 import Data.List ((\\))
 
 none :: (a -> Bool) -> [a] -> Bool

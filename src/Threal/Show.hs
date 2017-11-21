@@ -1,6 +1,6 @@
 module Threal.Show where
 
-import Threal
+import Threal.Base
 import Threal.Threals
 import Threal.Comps
 

@@ -1,6 +1,6 @@
 module Threal.Impartial where
 
-import Threal
+import Threal.Base
 import Threal.Threals
 
 data ThrealTree = TThunk | TNode [(Threal, ThrealTree, ThrealTree, ThrealTree)]
