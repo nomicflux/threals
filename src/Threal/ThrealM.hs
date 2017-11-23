@@ -4,21 +4,51 @@ import Threal.Base
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
-import Control.Monod.Reader
-import Control.Monad.State (State, get, put, runState, evalState, StateT, liftIO, evalStateT)
+import Control.Monod.Reader (Reader, ask)
+import Control.Monad.State (State, get, gets, put, runState, evalState, StateT, liftIO, evalStateT)
 import Control.Monad (when, mapM, mapM_)
 
-data Comps = Comps { redComp :: (Threal -> Threal -> Bool)
-                   , greenComp :: (Threal -> Threal -> Bool)
-                   , blueComp :: (Threal -> Threal -> Bool)
+data Comps = Comps { redComp :: Threal -> Threal -> Bool
+                   , greenComp :: Threal -> Threal -> Bool
+                   , blueComp :: Threal -> Threal -> Bool
                    }
 
-data ThrealCache = { dominatedCache :: HashMap Threal Threal
-                   , reversedCache :: HashMap Threal Threal
-                   , uniqueCache :: HashMap Threal Threal
-                   }
+data ThrealConfig = ThrealConfig { threalComps :: Comps }
 
-type ThrealM a = StateT ThrealCache (ReaderT IO Comps) a
+data ThrealCache = ThrealCache { dominatedCache :: HashMap Threal Threal
+                               , reversedCache :: HashMap Threal Threal
+                               , uniqueCache :: HashMap Threal Threal
+                               }
+
+type ThrealM a = StateT ThrealCache (ReaderT IO ThrealConfig) a
+
+writeLine :: String -> ThrealM a
+writeLine = liftIO . putStrLn
+
+getComps :: ThrealM Comps
+getComps = threalComps <$> lift ask
+
+getDominated :: Threal -> ThrealM a -> ThrealM Threal
+getDominated x = do
+  cache <- gets dominatedCache
+  return $ M.lookup x cache
+
+getReversed :: Threal -> ThrealM a -> ThrealM Threal
+getReversed x = do
+  cache <- gets reversedCache
+  return $ M.lookup x cache
+
+getUnique :: Threal -> ThrealM a -> ThrealM Threal
+getUnique x = do
+  cache <- gets uniqueCache
+  return $ M.lookup x cache
+
+data ThrealAction = AddT ThrealAction ThrealAction
+                  | NubT ThrealAction
+                  | DominateT ThrealAction
+                  | ReverseT ThrealAction
+                  | PureT Threal
+                  | BindT ThrealAction (Threal -> ThrealAction)
 
 nubComps :: Comps -> [Threal] -> [Threal]
 nubComps c ts = nubBy eqC ts
