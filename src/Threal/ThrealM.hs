@@ -1,10 +1,12 @@
+{-# LANGUAGE DeriveFunctor #-}
 module Threal.ThrealM where
 
 import Threal.Base
 
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
-import Control.Monod.Reader (Reader, ask)
+import Control.Monad.Free
+import Control.Monad.Reader (Reader, ask)
 import Control.Monad.State (State, get, gets, put, runState, evalState, StateT, liftIO, evalStateT)
 import Control.Monad (when, mapM, mapM_)
 
@@ -43,12 +45,16 @@ getUnique x = do
   cache <- gets uniqueCache
   return $ M.lookup x cache
 
-data ThrealAction = AddT ThrealAction ThrealAction
-                  | NubT ThrealAction
-                  | DominateT ThrealAction
-                  | ReverseT ThrealAction
-                  | PureT Threal
-                  | BindT ThrealAction (Threal -> ThrealAction)
+data ThrealCalc = AddT ThrealCalc ThrealCalc
+                | NubT ThrealCalc
+                | DominateT ThrealCalc
+                | ReverseT ThrealCalc
+                | PureT Threal
+
+data ThrealF next = PerformCalc ThrealCalc next
+                  | PrintCalc next
+                  | Stop
+  deriving (Functor)
 
 nubComps :: Comps -> [Threal] -> [Threal]
 nubComps c ts = nubBy eqC ts
